@@ -7,8 +7,8 @@ services:
     container_name: ibkr-api-gateway
     restart: unless-stopped
     environment:
-      TWS_USERID: ${TWS_USERID}
-      TWS_PASSWORD: ${TWS_PASSWORD}
+      TWS_USERID: ${TWS_USERID:-}
+      TWS_PASSWORD: ${TWS_PASSWORD:-}
       TWS_USERID_PAPER: ${TWS_USERID_PAPER:-}
       TWS_PASSWORD_PAPER: ${TWS_PASSWORD_PAPER:-}
       TRADING_MODE: ${TRADING_MODE:-paper}
@@ -20,6 +20,31 @@ services:
       TIME_ZONE: ${TIME_ZONE:-Etc/UTC}
       TZ: ${TIME_ZONE:-Etc/UTC}
       AUTO_RESTART_TIME: ${AUTO_RESTART_TIME:-11:59 PM}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+          case "$${TRADING_MODE:-paper}" in
+            paper)
+              : "$${TWS_USERID_PAPER:?TWS_USERID_PAPER is required when TRADING_MODE=paper}"
+              : "$${TWS_PASSWORD_PAPER:?TWS_PASSWORD_PAPER is required when TRADING_MODE=paper}"
+              ;;
+            live)
+              : "$${TWS_USERID:?TWS_USERID is required when TRADING_MODE=live}"
+              : "$${TWS_PASSWORD:?TWS_PASSWORD is required when TRADING_MODE=live}"
+              ;;
+            both)
+              : "$${TWS_USERID:?TWS_USERID is required when TRADING_MODE=both}"
+              : "$${TWS_PASSWORD:?TWS_PASSWORD is required when TRADING_MODE=both}"
+              : "$${TWS_USERID_PAPER:?TWS_USERID_PAPER is required when TRADING_MODE=both}"
+              : "$${TWS_PASSWORD_PAPER:?TWS_PASSWORD_PAPER is required when TRADING_MODE=both}"
+              ;;
+            *)
+              echo "Unsupported TRADING_MODE: $${TRADING_MODE}" >&2
+              exit 1
+              ;;
+          esac
+          exec /home/ibgateway/scripts/run.sh
     ports:
       - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_LIVE_HOST_PORT:-4001}:4003"
       - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_PAPER_HOST_PORT:-4002}:4004"

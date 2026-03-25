@@ -96,8 +96,8 @@ docker compose logs -f ib-gateway
 
 `TRADING_MODE` controls which IB session(s) the container starts:
 
-- `paper`: use your paper credentials and paper session
-- `live`: use your live credentials and live session
+- `paper`: use your paper credentials and paper session; live credentials are optional
+- `live`: use your live credentials and live session; paper credentials are optional
 - `both`: start both sessions in parallel
 
 When `TRADING_MODE=both`, you must provide:
