@@ -1,0 +1,31 @@
+name: ibkr-api-gateway
+
+services:
+  ib-gateway:
+    # Pinned to the digest currently published behind the upstream stable channel.
+    image: ghcr.io/gnzsnz/ib-gateway@sha256:22d5bf5e6699b3c28cb806c21e2cc46c6337df3599f758d9ae685ad3aa9eb0d5
+    container_name: ibkr-api-gateway
+    restart: unless-stopped
+    environment:
+      TWS_USERID: ${TWS_USERID}
+      TWS_PASSWORD: ${TWS_PASSWORD}
+      TWS_USERID_PAPER: ${TWS_USERID_PAPER:-}
+      TWS_PASSWORD_PAPER: ${TWS_PASSWORD_PAPER:-}
+      TRADING_MODE: ${TRADING_MODE:-paper}
+      TWS_ACCEPT_INCOMING: ${TWS_ACCEPT_INCOMING:-accept}
+      READ_ONLY_API: ${READ_ONLY_API:-yes}
+      TWOFA_TIMEOUT_ACTION: ${TWOFA_TIMEOUT_ACTION:-restart}
+      RELOGIN_AFTER_TWOFA_TIMEOUT: ${RELOGIN_AFTER_TWOFA_TIMEOUT:-yes}
+      VNC_SERVER_PASSWORD: ${VNC_SERVER_PASSWORD:-}
+      TIME_ZONE: ${TIME_ZONE:-Etc/UTC}
+      TZ: ${TIME_ZONE:-Etc/UTC}
+      AUTO_RESTART_TIME: ${AUTO_RESTART_TIME:-11:59 PM}
+    ports:
+      - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_LIVE_HOST_PORT:-4001}:4003"
+      - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_PAPER_HOST_PORT:-4002}:4004"
+      - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_VNC_HOST_PORT:-5900}:5900"
+    volumes:
+      - ib-gateway-settings:/home/ibgateway/Jts
+
+volumes:
+  ib-gateway-settings:
