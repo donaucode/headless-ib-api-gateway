@@ -28,6 +28,8 @@ services:
             paper)
               : "$${TWS_USERID_PAPER:?TWS_USERID_PAPER is required when TRADING_MODE=paper}"
               : "$${TWS_PASSWORD_PAPER:?TWS_PASSWORD_PAPER is required when TRADING_MODE=paper}"
+              export TWS_USERID="$${TWS_USERID:-$${TWS_USERID_PAPER}}"
+              export TWS_PASSWORD="$${TWS_PASSWORD:-$${TWS_PASSWORD_PAPER}}"
               ;;
             live)
               : "$${TWS_USERID:?TWS_USERID is required when TRADING_MODE=live}"

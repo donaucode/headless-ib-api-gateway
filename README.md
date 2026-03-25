@@ -31,7 +31,7 @@ By default the ports are bound to `127.0.0.1`, so they are reachable from the ho
 
 ## How It Works
 
-This repo uses the community-maintained `gnzsnz/ib-gateway-docker` image, pinned to an immutable digest in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml).
+This repo uses the community-maintained `gnzsnz/ib-gateway-docker` image, pinned to an immutable digest in [docker-compose.yml](/home/forstner/fackatrader/headless-ib-api-gateway/docker-compose.yml).
 
 The compose file starts one service:
 
@@ -52,9 +52,9 @@ Upstream project:
 
 ## Repository Files
 
-- [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml): container definition, port mappings, volume
-- [.env.example](/home/forstner/ft-tui/.env.example): example runtime configuration
-- [.env](/home/forstner/ft-tui/.env): your local runtime configuration, not committed
+- [docker-compose.yml](/home/forstner/fackatrader/headless-ib-api-gateway/docker-compose.yml): container definition, port mappings, volume
+- [.env.example](/home/forstner/fackatrader/headless-ib-api-gateway/.env.example): example runtime configuration
+- [.env](/home/forstner/fackatrader/headless-ib-api-gateway/.env): your local runtime configuration, not committed
 
 ## Requirements
 
@@ -74,6 +74,18 @@ cp .env.example .env
 
 2. Edit `.env` and set your credentials and preferred mode.
 
+Credential rules in this repo:
+
+- `TRADING_MODE=paper`: set `TWS_USERID_PAPER` and `TWS_PASSWORD_PAPER`
+- `TRADING_MODE=live`: set `TWS_USERID` and `TWS_PASSWORD`
+- `TRADING_MODE=both`: set all four
+
+Important:
+
+- upstream `gnzsnz/ib-gateway-docker` expects `TWS_USERID` / `TWS_PASSWORD` for normal startup
+- this repo adds a small compatibility layer in `docker-compose.yml` so `paper` mode reliably uses `TWS_USERID_PAPER` / `TWS_PASSWORD_PAPER`
+- this avoids the common failure mode where the GUI opens but the login fields are effectively blank and the API socket on `4002` never comes up
+
 3. Start the gateway:
 
 ```bash
@@ -92,6 +104,18 @@ docker compose ps
 docker compose logs -f ib-gateway
 ```
 
+6. Wait for a successful login before connecting your app.
+
+Healthy login signals in the logs:
+
+- `Click button: Paper Log In` or `Click button: Log In`
+- `Login has completed`
+
+If you need to verify the API is actually up, check that your client can connect to:
+
+- `127.0.0.1:4002` for paper
+- `127.0.0.1:4001` for live
+
 ## Trading Modes
 
 `TRADING_MODE` controls which IB session(s) the container starts:
@@ -99,6 +123,12 @@ docker compose logs -f ib-gateway
 - `paper`: use your paper credentials and paper session; live credentials are optional
 - `live`: use your live credentials and live session; paper credentials are optional
 - `both`: start both sessions in parallel
+
+This repo's exact behavior:
+
+- in `paper` mode, the startup wrapper validates `TWS_USERID_PAPER` / `TWS_PASSWORD_PAPER` and maps them into the upstream image's expected login fields before launch
+- in `live` mode, it uses `TWS_USERID` / `TWS_PASSWORD`
+- in `both` mode, it requires both credential sets and leaves the upstream dual-mode behavior intact
 
 When `TRADING_MODE=both`, you must provide:
 
@@ -120,7 +150,7 @@ In practice:
 
 ## Environment Variables
 
-The main settings live in [.env.example](/home/forstner/ft-tui/.env.example).
+The main settings live in [.env.example](/home/forstner/fackatrader/headless-ib-api-gateway/.env.example).
 
 Important variables:
 
@@ -148,6 +178,12 @@ The compose file maps host ports to the ports used inside the container:
 - host `5900` -> container `5900` for VNC
 
 The internal ports `4003` and `4004` come from the upstream image. Your own app should connect to the host ports, not the internal container ports.
+
+Note:
+
+- seeing Docker publish `4002` does not guarantee that IB Gateway finished login
+- the socket becomes usable only after the GUI login completes and IB Gateway starts listening internally
+- if your client gets disconnected immediately, check the container logs first
 
 ## Connecting From Your Trading App
 
@@ -247,12 +283,12 @@ Do not expose the IB API socket directly to the public internet.
 
 ## Upgrading
 
-The image in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml) is pinned by digest for stability.
+The image in [docker-compose.yml](/home/forstner/fackatrader/headless-ib-api-gateway/docker-compose.yml) is pinned by digest for stability.
 
 To upgrade:
 
 1. choose a newer tested upstream image version or digest
-2. update the `image:` line in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml)
+2. update the `image:` line in [docker-compose.yml](/home/forstner/fackatrader/headless-ib-api-gateway/docker-compose.yml)
 3. run `docker compose pull`
 4. run `docker compose up -d`
 
