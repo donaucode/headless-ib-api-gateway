@@ -11,6 +11,24 @@ This repository does one thing:
 
 It is intentionally small. This repo is not your trading app, not a frontend, and not a strategy engine. It is only the gateway runtime.
 
+## Restart and rebuild 
+
+```
+From the gateway repo directory:
+
+  cd /home/forstner/fackatrader/headless-ib-api-gateway
+  docker compose down
+  docker compose up -d --force-recreate
+
+If you also changed the pinned image and want Docker to fetch it first:
+
+  cd /home/forstner/fackatrader/headless-ib-api-gateway
+  docker compose down
+  docker compose pull
+  docker compose up -d --force-recreate
+```
+
+
 ## What This Gives You
 
 The container runs IB Gateway in Docker and makes it reachable from other processes on the same machine.
