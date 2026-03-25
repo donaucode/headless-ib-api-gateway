@@ -1,87 +1,206 @@
 # IBKR API Gateway Docker
 
-Minimal repository for running Interactive Brokers Gateway in Docker for headless environments.
+Minimal Docker setup for running Interactive Brokers Gateway on a server or VPS.
 
-What remains in this repo:
-- `docker-compose.yml`
-- `.env`
-- `.env.example`
-- this `README.md`
+This repository does one thing:
 
-The gateway container is based on the `gnzsnz/ib-gateway-docker` image, pinned to an immutable digest in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml):
-- upstream image docs: https://github.com/gnzsnz/ib-gateway-docker
-- `@stoqey/ib` client docs: https://github.com/stoqey/ib
+- starts a single IB Gateway container
+- exposes paper and/or live IB API socket ports on the host
+- optionally exposes VNC for GUI access
+- persists IB Gateway settings in a Docker volume
 
-## Purpose
+It is intentionally small. This repo is not your trading app, not a frontend, and not a strategy engine. It is only the gateway runtime.
 
-This repo is now only a reusable IBKR Gateway runtime. It does not include:
-- Nuxt
-- Supabase
-- any frontend
-- any custom backend proxy
+## What This Gives You
 
-It exposes the native IB Gateway socket ports so another service can connect to them.
+The container runs IB Gateway in Docker and makes it reachable from other processes on the same machine.
 
-## Important Integration Constraint
+Typical setup:
 
-IB Gateway speaks the native IB socket protocol over raw TCP.
+```text
+Your trading app -> 127.0.0.1:4002 or 127.0.0.1:4001 -> IB Gateway container -> IBKR
+```
 
-That means:
-- a browser frontend cannot connect to it directly
-- a server, worker, Electron main process, or API/BFF layer can connect to it
-- your frontend should talk to your own backend, and that backend should talk to IB Gateway
+Use:
 
-This matches `@stoqey/ib`, which uses Node's socket APIs rather than browser APIs.
+- `4002` for paper trading
+- `4001` for live trading
+- `5900` for VNC access to the IB Gateway GUI
 
-## Files
+By default the ports are bound to `127.0.0.1`, so they are reachable from the host itself but not from the public network.
 
-`docker-compose.yml`
-- starts one `ib-gateway` container
-- exposes live, paper, and optional VNC ports
-- persists gateway settings in the named Docker volume `ib-gateway-settings`
+## How It Works
 
-`.env` / `.env.example`
-- contain the runtime configuration for credentials, ports, and safety settings
+This repo uses the community-maintained `gnzsnz/ib-gateway-docker` image, pinned to an immutable digest in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml).
 
-## Configuration
+The compose file starts one service:
 
-1. Copy the example file if you do not already have a populated `.env`.
+- `ib-gateway`
+
+The container:
+
+- logs in to IB Gateway with the credentials from `.env`
+- starts in `paper`, `live`, or `both` mode
+- exposes IB Gateway's internal ports through Docker port mappings
+- stores settings in the named volume `ib-gateway-settings`
+
+The image is pinned so upgrades do not happen implicitly when upstream changes `stable`.
+
+Upstream project:
+
+- https://github.com/gnzsnz/ib-gateway-docker
+
+## Repository Files
+
+- [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml): container definition, port mappings, volume
+- [.env.example](/home/forstner/ft-tui/.env.example): example runtime configuration
+- [.env](/home/forstner/ft-tui/.env): your local runtime configuration, not committed
+
+## Requirements
+
+- Docker
+- Docker Compose
+- valid IBKR credentials
+
+If you want to use both paper and live at the same time, you need separate paper and live credentials.
+
+## Setup
+
+1. Create your local env file:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Set the required credentials.
+2. Edit `.env` and set your credentials and preferred mode.
 
-Required:
-- `TWS_USERID`
-- `TWS_PASSWORD`
-
-Required when `TRADING_MODE=both`:
-- `TWS_USERID_PAPER`
-- `TWS_PASSWORD_PAPER`
-
-Key operational variables:
-- `TRADING_MODE`: `paper`, `live`, or `both`
-- `READ_ONLY_API`: keep `yes` unless you intentionally want trading access
-- `TWS_ACCEPT_INCOMING`: usually `accept`
-- `TWOFA_TIMEOUT_ACTION`: usually `restart`
-- `RELOGIN_AFTER_TWOFA_TIMEOUT`: usually `yes`
-- `TIME_ZONE`: container time zone
-- `AUTO_RESTART_TIME`: optional daily restart handled by IBC
-
-Host exposure variables:
-- `IB_GATEWAY_BIND_ADDRESS`: keep `127.0.0.1` by default
-- `IB_GATEWAY_LIVE_HOST_PORT`: default `4001`
-- `IB_GATEWAY_PAPER_HOST_PORT`: default `4002`
-- `IB_GATEWAY_VNC_HOST_PORT`: default `5900`
-
-## Run
-
-Start the gateway:
+3. Start the gateway:
 
 ```bash
 docker compose up -d
+```
+
+4. Check container status:
+
+```bash
+docker compose ps
+```
+
+5. Follow logs when needed:
+
+```bash
+docker compose logs -f ib-gateway
+```
+
+## Trading Modes
+
+`TRADING_MODE` controls which IB session(s) the container starts:
+
+- `paper`: use your paper credentials and paper session
+- `live`: use your live credentials and live session
+- `both`: start both sessions in parallel
+
+When `TRADING_MODE=both`, you must provide:
+
+- `TWS_USERID`
+- `TWS_PASSWORD`
+- `TWS_USERID_PAPER`
+- `TWS_PASSWORD_PAPER`
+
+Important:
+
+- `TRADING_MODE=both` does not mean the gateway automatically switches for you
+- it means both sessions are available
+- your trading app decides which one to use by connecting to the appropriate port
+
+In practice:
+
+- connect to `127.0.0.1:4002` for paper
+- connect to `127.0.0.1:4001` for live
+
+## Environment Variables
+
+The main settings live in [.env.example](/home/forstner/ft-tui/.env.example).
+
+Important variables:
+
+- `TRADING_MODE`: `paper`, `live`, or `both`
+- `READ_ONLY_API`: `yes` prevents order placement through the API
+- `TWS_USERID` / `TWS_PASSWORD`: live credentials
+- `TWS_USERID_PAPER` / `TWS_PASSWORD_PAPER`: paper credentials
+- `TWS_ACCEPT_INCOMING`: usually `accept`
+- `TWOFA_TIMEOUT_ACTION`: usually `restart`
+- `RELOGIN_AFTER_TWOFA_TIMEOUT`: usually `yes`
+- `VNC_SERVER_PASSWORD`: set this if you want VNC access
+- `TIME_ZONE`: container time zone
+- `AUTO_RESTART_TIME`: optional daily restart time
+- `IB_GATEWAY_BIND_ADDRESS`: keep `127.0.0.1` unless you know exactly why you want wider exposure
+- `IB_GATEWAY_LIVE_HOST_PORT`: host port for live, default `4001`
+- `IB_GATEWAY_PAPER_HOST_PORT`: host port for paper, default `4002`
+- `IB_GATEWAY_VNC_HOST_PORT`: host port for VNC, default `5900`
+
+## Ports
+
+The compose file maps host ports to the ports used inside the container:
+
+- host `4001` -> container `4003` for live
+- host `4002` -> container `4004` for paper
+- host `5900` -> container `5900` for VNC
+
+The internal ports `4003` and `4004` come from the upstream image. Your own app should connect to the host ports, not the internal container ports.
+
+## Connecting From Your Trading App
+
+Your trading app should run separately from this repo and connect to the gateway over TCP.
+
+Typical mapping:
+
+- paper environment -> `127.0.0.1:4002`
+- live environment -> `127.0.0.1:4001`
+
+This repo does not decide whether your strategy is in paper or live mode. Your trading app owns that decision.
+
+Recommended separation:
+
+- gateway repo: credentials, session runtime, port exposure
+- trading app: client IDs, risk limits, live-trading kill switch, strategy selection
+
+If you have a browser frontend, the frontend should talk to your own backend, and the backend should talk to IB Gateway.
+
+## VNC Access
+
+VNC is only for maintenance and troubleshooting.
+
+Use cases:
+
+- checking whether IB Gateway is logged in
+- handling login issues or prompts
+- verifying the GUI state during setup
+
+If you do not need VNC, leave it disabled operationally or avoid exposing the port where possible.
+
+## Persistence
+
+The named Docker volume `ib-gateway-settings` stores IB Gateway settings across container restarts.
+
+That means:
+
+- restarting or recreating the container does not wipe settings
+- `docker compose down` keeps the volume
+- `docker compose down -v` removes the container and the persisted settings volume
+
+## Common Commands
+
+Start:
+
+```bash
+docker compose up -d
+```
+
+View status:
+
+```bash
+docker compose ps
 ```
 
 Follow logs:
@@ -90,71 +209,51 @@ Follow logs:
 docker compose logs -f ib-gateway
 ```
 
-Stop it:
+Stop:
 
 ```bash
 docker compose down
 ```
 
-Remove it together with the persisted gateway settings volume:
+Stop and remove persisted settings:
 
 ```bash
 docker compose down -v
 ```
 
-## Ports
+Pull the pinned image and recreate:
 
-By default the host exposes:
-- live socket API on `127.0.0.1:4001`
-- paper socket API on `127.0.0.1:4002`
-- VNC on `127.0.0.1:5900` when `VNC_SERVER_PASSWORD` is set
-
-Inside the container the image publishes:
-- live on `4003`
-- paper on `4004`
-
-This mirrors the upstream image design, which relays the internal IB ports to externally reachable container ports.
-
-## Using It From Your Own App
-
-Use a backend service on the same host or network boundary and connect it to the exposed socket port.
-
-Typical mapping:
-- paper mode: connect your client to `127.0.0.1:${IB_GATEWAY_PAPER_HOST_PORT}`
-- live mode: connect your client to `127.0.0.1:${IB_GATEWAY_LIVE_HOST_PORT}`
-
-Example with `@stoqey/ib` in Node.js:
-
-```ts
-import { IBApi } from "@stoqey/ib";
-
-const ib = new IBApi({
-  host: "127.0.0.1",
-  port: 4002,
-  clientId: 123,
-});
-
-ib.connect();
+```bash
+docker compose pull
+docker compose up -d
 ```
 
-If your frontend is a browser app, place a backend between the browser and IB Gateway:
+## Security Notes
 
-```text
-Browser UI -> your API/BFF -> IB Gateway socket
-```
+IB Gateway exposes a raw TCP API. It is not something you should place openly on the public internet.
 
-## Security
+Keep these defaults unless you have a deliberate security design:
 
-The IB API socket is not designed to be exposed openly on the network.
+- `IB_GATEWAY_BIND_ADDRESS=127.0.0.1`
+- `READ_ONLY_API=yes` while testing
 
-Default recommendation:
-- keep `IB_GATEWAY_BIND_ADDRESS=127.0.0.1`
-- keep `READ_ONLY_API=yes` unless order placement is intentional
-- only expose the ports remotely behind your own SSH tunnel, VPN, reverse proxy, or other access control layer
+If you ever need remote access, put your own security boundary in front of it, for example:
 
-## Notes
+- SSH tunnel
+- VPN
+- tightly controlled private network
 
-- `TRADING_MODE=both` is useful when one environment needs both live and paper sessions.
-- The Docker volume `ib-gateway-settings` keeps gateway settings across container restarts.
-- The image is pinned to the digest that was behind upstream `stable` when this repo was updated, corresponding to upstream image version `10.37`.
-- To upgrade later, inspect the upstream package page for a newer tested digest and update the `image:` line in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml).
+Do not expose the IB API socket directly to the public internet.
+
+## Upgrading
+
+The image in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml) is pinned by digest for stability.
+
+To upgrade:
+
+1. choose a newer tested upstream image version or digest
+2. update the `image:` line in [docker-compose.yml](/home/forstner/ft-tui/docker-compose.yml)
+3. run `docker compose pull`
+4. run `docker compose up -d`
+
+This keeps upgrades explicit and predictable.
